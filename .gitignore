@@ -1,0 +1,10 @@
+*.pyc
+data/*
+**/__pycache__
+**pyc
+**.idea/
+results/*
+wandb/*
+myVideos/*
+.DS_Store
+saveVizVideosHere/*
