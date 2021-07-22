@@ -1,8 +1,11 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
+import torch.distributions as D 
 from torchvision import models
 import numpy as np 
+import math
 
 
 class Featurenet(nn.Module):
@@ -16,13 +19,17 @@ class Featurenet(nn.Module):
 		self.pretrained = params['pretrained']
 
 		# 1.first resnet18 to get features with size 512
-		resnet = models.resnet18(pretrained = pretrained)
+		resnet = models.resnet18(pretrained = self.pretrained)
 		self.encoder = nn.Sequential(*list(resnet.children())[0:9])
 
 		self.fc1 = nn.Linear(512, self.feat_dim)
 
 	def forward(self, cur_img):
-		x = self.fc1(self.encoder(cur_img))
+		'''
+		input : cur_img (B,C,H,W)
+		output: feature (B,E)
+		'''
+		x = self.fc1(torch.squeeze(self.encoder(cur_img)))
 		x = F.relu(x)
 		x = x.view(-1,self.feat_dim)
 		return x
@@ -53,102 +60,105 @@ class SeqGoalBC(nn.Module):
 	'''
 	def __init__(self, params):
 		super(SeqGoalBC, self).__init__()
-
-		self.feat_dim = params['feat_dim'] * 2
+		self.device = torch.device("cuda:0" if (torch.cuda.is_available() and params['gpu']) else "cpu")
+		self.feat_dim = params['feat_dim']
+		self.tfeat_dim = params['feat_dim'] * 2
 		self.n_head = params['n_head']
 		self.n_layers = params['n_layers']
+		self.action_dim = params['action_dim']
+		self.num_dis = params['num_dis']
 
 		# sequential network (transfermer)
 		# https://pytorch.org/tutorials/beginner/transformer_tutorial.html
-		encoder_layer = nn.TransformerEncoderLayer(d_model=self.feat_dim, n_head = 8)
+		encoder_layer = nn.TransformerEncoderLayer(d_model=self.tfeat_dim, nhead = self.n_head)
 		self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.n_layers)
-		self.pos_encoder = PositionalEncoding(self.feat_dim, dropout = 0.1)
+		self.pos_encoder = PositionalEncoding(self.tfeat_dim, dropout = 0.1)
 
-		# 
+		# feature extraction
+		self.img_emb = Featurenet(params)
 
-		resnet = models.resnet18(pretrained = pretrained)
-		self.encoder = nn.Sequential(*list(resnet.children())[0:9])
+		# gripper net
+		self.fc1 = nn.Linear(self.tfeat_dim, 256)
+		self.fc2 = nn.Linear(256, 1)
+		self.g_net = nn.Sequential(self.fc1, nn.ReLU(), self.fc2, nn.Sigmoid())
 
-		self.fc1 = nn.Linear(512, feat_dim)
-		self.fc1 = nn.Linear(512, feat_dim)
+		# POSITION ANGLE NET
+		self.fcw = nn.Linear(self.tfeat_dim, self.action_dim*self.num_dis)
+		self.fcu = nn.Linear(self.tfeat_dim, self.action_dim*self.num_dis)
+		self.fcs = nn.Linear(self.tfeat_dim, self.action_dim*self.num_dis)
 
-	def forward(self, feat, gripper = False):
+	def logistic_mixture(self, inputs, action_dim = 9, num_dis = 64):
 		'''
-        Args:
-        	feat : (B, S, E) 16,3,512
-        	gripper : whether predict gripper 
-        Output:
-            translation : (B, 3)
-            rotation : (B, 6)
-            gripper : (B, 1)
-        '''
-		B, S, E = feat.shape
+		Args:
+			similar to VAE
+			use weights, mu, sig to generate mixture of distributions
+			action_dim 9
+			weights,u,sig B, 9, num_dis
+		Output: 
+			sample actions B,9
+		'''
+		weights, mu, scale = inputs
+		# logistics distributions 
+		base_distribution = D.Uniform(torch.zeros(mu.shape).to(self.device),torch.ones(mu.shape).to(self.device))
+		transforms = [D.SigmoidTransform().inv, D.AffineTransform(loc=mu, scale=scale)]
+		logistic = D.TransformedDistribution(base_distribution, transforms)
+		
+		weightings = D.Categorical(logits=weights)
+		mixture_dist = D.MixtureSameFamily(
+			mixture_distribution=weightings,
+			component_distribution=logistic)
+		return mixture_dist.sample()
 
-		feat = feat.reshape(B, S, self.feat_dim).permute(1,0,2).float() # (S, B, E)
+	def forward(self, imgs, gripper = False):
+		'''
+		Args:
+			imgs : (B, S+1, E) 16,3+1,512 (seq+goal)
+			gripper : whether predict gripper 
+		Output:
+			translation : (B, 3)
+			rotation : (B, 6)
+			gripper : (B, 1)
+		'''
+		# 
+		B, S, C, H, W = imgs.shape
+		# get feature embeddings  
+		feat = self.img_emb(imgs.reshape(B*S, C, H, W)) # (B*S, E)	
+		feat = feat.reshape(B, S, self.feat_dim) 
+		# concat goal feature to each feature (B, S-1, tfeat_dim) 
+		feat = torch.cat([feat[:,:-1,:], feat[:,-1:,:].repeat(1,S-1,1)], dim=-1)
+
+		feat = feat.permute(1,0,2).float() # (S, B, E)
 		feat = self.pos_encoder(feat)
 		feat = self.transformer_encoder(feat)
-        cnn_emb = feat.clone()
 
-# x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
+		emb = feat.permute([1,0,2]).mean(dim = 1) # B,tfeat_dim
 		# gripper net
+		import ipdb;ipdb.set_trace()
+		g_pred = torch.tensor([])
 		if gripper == True:
-			F.relu(self.conv1(x))
-			x = x.view(-1,512)
+			g_pred = self.g_net(emb).reshape(B,1)
 
-		# POSITION NET
-		pfc1 = nn.Linear(in_features=self.dimm, out_features=self.feat_dim, bias=True).to(self.device) # *3 for 3 images
-		pfc2 = nn.Linear(in_features=self.feat_dim, out_features=3, bias=True).to(self.device)
-		self.p_net = nn.Sequential(pfc1, nn.ReLU(), pfc2).to(self.device)
+		weights = F.relu(self.fcw(emb)).reshape(B,self.action_dim,self.num_dis)
+		mu = F.relu(self.fcu(emb)).reshape(B,self.action_dim,self.num_dis)
+		scale = F.relu(self.fcs(emb+1e-4)).reshape(B,self.action_dim,self.num_dis)
 
-		if self.net_type=="alex":
-			pfc1 = nn.Linear(in_features=self.dimm, out_features=self.feat_dim * 2, bias=True).to(self.device)  # *3 for 3 images
-			pfc2 = nn.Linear(in_features=self.feat_dim * 2, out_features=self.feat_dim, bias=True).to(self.device)
-			pfc3 = nn.Linear(in_features=self.feat_dim, out_features=3, bias=True).to(self.device)  # *3 for 3 images
-
-			self.p_net = nn.Sequential(pfc1, nn.ReLU(), pfc2, nn.ReLU(), pfc3).to(self.device)
-
-
-
-		# ANGLE NETS
-
-		# INDEPENDENT, 6D: input 3 images + pos (3) concatenated, output angle in 6d representation
-		in_a6dfc1 = nn.Linear(in_features=self.dimm, out_features=self.feat_dim, bias=True).to(self.device)
-		in_a6dfc2 = nn.Linear(in_features=self.feat_dim, out_features=6, bias=True).to(self.device)  # 2 * 3 matrix
-		self.in_a6d_net = nn.Sequential(in_a6dfc1, nn.ReLU(), in_a6dfc2).to(self.device).to(self.device)
-
-		# INDEPENDENT, 3D: input 3 images + pos (3) concatenated, output angle in angle-axis representation
-		in_a3dfc1 = nn.Linear(in_features=self.dimm, out_features=self.feat_dim, bias=True).to(self.device)
-		in_a3dfc2 = nn.Linear(in_features=self.feat_dim, out_features=3, bias=True).to(self.device)  # 1 * 3 matrix
-		self.in_a3d_net = nn.Sequential(in_a3dfc1, nn.ReLU(), in_a3dfc2).to(self.device).to(self.device)
-
-		# DEPENDENT, 6D: input 3 images + pos (3) concatenated, output angle in 6d representation
-		dep_a6dfc1 = nn.Linear(in_features=3 + self.dimm, out_features=self.feat_dim, bias=True).to(self.device)
-		dep_a6dfc2 = nn.Linear(in_features=self.feat_dim, out_features=6, bias=True).to(self.device) # 2 * 3 matrix
-		self.dep_a6d_net = nn.Sequential(dep_a6dfc1, nn.ReLU(), dep_a6dfc2).to(self.device).to(self.device)
-
-		# DEPENDENT, 3D: input 3 images + pos (3) concatenated, output angle in angle-axis representation
-		dep_a3dfc1 = nn.Linear(in_features=3 + self.dimm, out_features=self.feat_dim, bias=True).to(self.device)
-		dep_a3dfc2 = nn.Linear(in_features=self.feat_dim, out_features=3, bias=True).to(self.device)  # 1 * 3 matrix
-		self.dep_a3d_net = nn.Sequential(dep_a3dfc1, nn.ReLU(), dep_a3dfc2).to(self.device).to(self.device)
-
-	def __init__(self, feat_dim = 2048, pretrained = True):
-		super(Conditional_Net_RN5N, self).__init__()
-		resnet = models.resnet18(pretrained = pretrained)
-		self.resnet_l5 = nn.Sequential(*list(resnet.children())[0:8])
-		self.conv1 = nn.Conv2d(512, 512, kernel_size = 3, padding = 1, bias = True)
-		#self.conv2 = nn.Conv2d(512, 512, kernel_size = 3, padding = 1, bias = True)
-		self.fc1 = nn.Linear(512, feat_dim)
-		self.pool = nn.MaxPool2d(2, 2)
-		self.bn1 = nn.BatchNorm2d(512)
-		self.bn2 = nn.BatchNorm2d(512)
+		# position and 6d rotaion
+		pred_act = self.logistic_mixture([weights,mu,scale],self.action_dim,self.num_dis)
 			
-	def forward(self, x):
-		x=self.pool(self.resnet_l5(x))
-		x = self.pool(F.relu(self.conv1(x)))
-		#x = self.pool(F.relu(self.conv2(x)))
-		x = x.view(-1,512)
-		x = self.fc1(x)
-		return x
+		return pred_act[:,:3], pred_act[:,3:], g_pred
+		
 if __name__ == '__main__':
-	src = torch.rand(10, 32, 512)
+	src = torch.rand(10, 5, 3, 224, 224)
+	params = {}
+	params["pretrained"] = True
+	params["feat_dim"] = 256
+	params["tfeat_dim"] = 256 * 2
+	params["n_head"] = 8
+	params["n_layers"] = 1
+	params["action_dim"] = 9
+	params["num_dis"] = 64
+	params['gpu'] = False
+	model = SeqGoalBC(params)
+	# model.cuda()
+	model(src,gripper=True)
 	# transformer_encoder(src) (10,32,512)
