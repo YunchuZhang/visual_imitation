@@ -31,6 +31,7 @@ class colmapdataset(Dataset):
 		folders = sorted(glob.glob(root_dir + "/*"), reverse=True)
 		print("dir", root_dir + "/*")
 		self.data_size = params['data_size']
+		self.seq_len = params['seq_len']
 		self.dataset = dataset
 
 		self.train = []
@@ -106,6 +107,7 @@ class colmapdataset(Dataset):
 
 			# Only gets images, goals, trans, rots that actually exist.
 			the_old_imgs, translations, rotations = self.get_vals(run)
+
 			imgs = the_old_imgs
 			if len(the_old_imgs) == 0 or len(translations) == 0:
 				continue
@@ -161,31 +163,54 @@ class colmapdataset(Dataset):
 					continue
 				trans.append(t)
 				rot.append(r)
-				imgs.append((f + "/images/" + img,f + "/images/" + goal_img))
+				imgs.append(f + "/images/" + img)
 		rot = np.array(rot)
 		trans = np.array(trans)
 		imgs = np.array(imgs)
 
-		return imgs, trans, rot
+		# split data to sequence data format
+		split_imgs, split_trans, split_rot = self.split_data(imgs,trans,rot,np.array([f + "/images/" + img]))
+		return split_imgs, split_trans, split_rot 
+
+	def split_data(self, imgs, trans, rot, goal_img, stride = 1):
+		'''
+		sliding window with lengh and stride
+		also append goal img path
+		'''
+
+		# stride = int(self.seq_len//2)
+		split_imgs = []
+		split_trans = []
+		split_rot = []
+		for n in range(0, len(imgs) - self.seq_len, stride):
+			split_imgs.append(np.concatenate((imgs[n:n+self.seq_len],goal_img)))
+			split_trans.append(trans[n+self.seq_len-1])
+			split_rot.append(rot[n+self.seq_len-1])
+		
+		return split_imgs, split_trans, split_rot
+
 	def __len__(self):
 		return len(self.train)
 
 	def __getitem__(self, idx):
 		img_names, actions, run, mirrored = self.train[idx]
 		img_t = img_names[0][0]
-		goal_img = img_names[0][1]
-
+		goal_img = img_names[0][-1]
+		imgs = []
 		if mirrored:
-			imgs = torch.unsqueeze(self.h_transform(Image.open(img_t)), 0)
+			for i in range(self.seq_len+1):
+				imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
+			imgs_goal = torch.unsqueeze(self.h_transform(Image.open(goal_img)), 0)
 			img_t = img_t[:-4] + "_mirrored" + img_t[-4:]
 		else:
-			imgs = torch.unsqueeze(self.transform(Image.open(img_t)), 0)
+			for i in range(self.seq_len+1):
+				imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
 			imgs_goal = torch.unsqueeze(self.transform(Image.open(goal_img)), 0)
 
 		if self.dataset == "train" and "cut" in self.rad:
 			opened = self.random_cutout_color(imgs.numpy(), min_cut=10, max_cut=210)
 			imgs = opened
-		return img_t, imgs, imgs_goal, actions, run, []
+		return img_t, torch.cat(imgs,dim=0), imgs_goal, actions, run, []
 
 	# From RAD
 	def random_cutout_color(self, imgs, min_cut=10, max_cut=30, min_w=10, max_w=60):
@@ -218,8 +243,11 @@ if __name__ == '__main__':
 	params['train_dir'] = 'data/train'
 	params['mirror'] = 0
 	params['rad'] = 'all'
+	params['seq_len'] = 5
 	params['data_size'] = 1
 	d = colmapdataset("train",params)
+	import ipdb;ipdb.set_trace()
+	d[0]
 	# should not shuffle? since depends on time sequence
 	train_loader = DataLoader(d, batch_size=16, shuffle=False,
 													sampler=None,

@@ -158,6 +158,7 @@ if __name__ == '__main__':
 	params["action_dim"] = 9
 	params["num_dis"] = 64
 	params['gpu'] = False
+	params['seq_len'] = 5
 	model = SeqGoalBC(params)
 	# model.cuda()
 	model(src,gripper=True)
