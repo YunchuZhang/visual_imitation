@@ -84,6 +84,7 @@ class colmapdataset(Dataset):
 		used_runs = 0
 		target_runs = round(total_runs * self.data_size)
 		for run in folders:
+			
 			counter += 1
 			if self.dataset == "train":
 				if self.data_size == 0.01 and counter % 100 != 0:
@@ -103,7 +104,6 @@ class colmapdataset(Dataset):
 					if used_runs > target_runs:
 						continue
 
-			used_runs += 1
 
 			# Only gets images, goals, trans, rots that actually exist.
 			the_old_imgs, translations, rotations = self.get_vals(run)
@@ -116,7 +116,9 @@ class colmapdataset(Dataset):
 			scale_factor = np.max(np.abs(translations))
 			if scale_factor >= 2.5 or scale_factor < 0.05:
 				print("Max norm(action) is not normal for run " + run + ": ", scale_factor)
+				continue
 
+			used_runs += 1
 			scaled_trans = translations / scale_factor
 
 			num_imgs = len(imgs)
@@ -159,8 +161,8 @@ class colmapdataset(Dataset):
 		for img, vals in items:
 			if os.path.exists(f + "/images/" + img):
 				t, r = vals
-				if max(np.abs(np.array(t))) < 0.05:
-					continue
+				# if max(np.abs(np.array(t))) < 0.05:
+				# 	continue
 				trans.append(t)
 				rot.append(r)
 				imgs.append(f + "/images/" + img)
@@ -249,11 +251,11 @@ if __name__ == '__main__':
 	import ipdb;ipdb.set_trace()
 	d[0]
 	# should not shuffle? since depends on time sequence
-	train_loader = DataLoader(d, batch_size=16, shuffle=False,
+	train_loader = DataLoader(d, batch_size=16, shuffle=True,
 													sampler=None,
 													batch_sampler=None, num_workers=4,
 													pin_memory=False, drop_last=False, timeout=0,
 													worker_init_fn=None)
 	for i_batch, (batch_img_names, batch_imgs, batch_imgs_goal, batch_actions, runs, aug) in enumerate(train_loader):
-		import ipdb;ipdb.set_trace()
+		print(batch_img_names)
 		batch_imgs = batch_imgs.to("cpu")
