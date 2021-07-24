@@ -1,0 +1,1 @@
+python train.py --task push --train_dir data/train --val_dir data/val --test_dir data/test --save_dir results
