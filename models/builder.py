@@ -70,7 +70,7 @@ class SeqGoalBC(nn.Module):
 
 		# sequential network (transfermer)
 		# https://pytorch.org/tutorials/beginner/transformer_tutorial.html
-		encoder_layer = nn.TransformerEncoderLayer(d_model=self.tfeat_dim, nhead = self.n_head)
+		encoder_layer = nn.TransformerEncoderLayer(d_model=self.tfeat_dim, nhead = self.n_head, dim_feedforward=8)
 		self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.n_layers)
 		self.pos_encoder = PositionalEncoding(self.tfeat_dim, dropout = 0.1)
 
@@ -99,7 +99,9 @@ class SeqGoalBC(nn.Module):
 		'''
 		weights, mu, scale = inputs
 		# logistics distributions 
-		base_distribution = D.Uniform(torch.zeros(mu.shape).to(self.device),torch.ones(mu.shape).to(self.device))
+		u_min = torch.zeros(mu.shape).to(self.device)
+		u_max = torch.ones(mu.shape).to(self.device)
+		base_distribution = D.Uniform(u_min,u_max)
 		transforms = [D.SigmoidTransform().inv, D.AffineTransform(loc=mu, scale=scale)]
 		logistic = D.TransformedDistribution(base_distribution, transforms)
 		
@@ -133,7 +135,6 @@ class SeqGoalBC(nn.Module):
 
 		emb = feat.permute([1,0,2]).mean(dim = 1) # B,tfeat_dim
 		# gripper net
-		import ipdb;ipdb.set_trace()
 		g_pred = torch.tensor([])
 		if gripper == True:
 			g_pred = self.g_net(emb).reshape(B,1)

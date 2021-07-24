@@ -2,15 +2,16 @@
 from __future__ import print_function, division
 import glob
 import numpy as np 
-# from units import jsonreader 
 import torch  
 from torch.utils.data import Dataset,DataLoader
 from torchvision import transforms 
-from PIL import Image 
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 from scipy.spatial.transform import Rotation as R  
 import random   
 import json
 import os
+
 
 class colmapdataset(Dataset):
 	"""dataset without gripper motion"""
@@ -107,7 +108,7 @@ class colmapdataset(Dataset):
 
 			# Only gets images, goals, trans, rots that actually exist.
 			the_old_imgs, translations, rotations = self.get_vals(run)
-
+			
 			imgs = the_old_imgs
 			if len(the_old_imgs) == 0 or len(translations) == 0:
 				continue
@@ -157,7 +158,10 @@ class colmapdataset(Dataset):
 		imgs = []
 		items = sorted(json_decode.items(), key=lambda x: x[0])
 		goal_img = "theframe{:04d}.png".format(int(items[-1][0][8:-4])+1)
-		assert os.path.exists(f + "/images/" + goal_img), "lossing goal_img"
+		if not os.path.exists(f + "/images/" + goal_img):
+			print("lossing goal_img of {}".format(f + "/images/" + goal_img))
+			return [],[],[]
+		assert os.path.exists(f + "/images/" + goal_img), "lossing goal_img of {}".format(f + "/images/" + goal_img)
 		for img, vals in items:
 			if os.path.exists(f + "/images/" + img):
 				t, r = vals
@@ -169,9 +173,8 @@ class colmapdataset(Dataset):
 		rot = np.array(rot)
 		trans = np.array(trans)
 		imgs = np.array(imgs)
-
 		# split data to sequence data format
-		split_imgs, split_trans, split_rot = self.split_data(imgs,trans,rot,np.array([f + "/images/" + img]))
+		split_imgs, split_trans, split_rot = self.split_data(imgs,trans,rot,np.array([f + "/images/" + goal_img]))
 		return split_imgs, split_trans, split_rot 
 
 	def split_data(self, imgs, trans, rot, goal_img, stride = 1):
@@ -195,6 +198,7 @@ class colmapdataset(Dataset):
 		return len(self.train)
 
 	def __getitem__(self, idx):
+		# return imgs with goal
 		img_names, actions, run, mirrored = self.train[idx]
 		img_t = img_names[0][0]
 		goal_img = img_names[0][-1]
@@ -205,6 +209,7 @@ class colmapdataset(Dataset):
 			imgs_goal = torch.unsqueeze(self.h_transform(Image.open(goal_img)), 0)
 			img_t = img_t[:-4] + "_mirrored" + img_t[-4:]
 		else:
+			print(img_names)
 			for i in range(self.seq_len+1):
 				imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
 			imgs_goal = torch.unsqueeze(self.transform(Image.open(goal_img)), 0)
