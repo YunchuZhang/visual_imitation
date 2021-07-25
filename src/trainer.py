@@ -65,7 +65,8 @@ class PolicyTrainer:
 																					 worker_init_fn=None)
 		self.num_test = len(self.test_set)
 
-		wandb.init(project="trashbot")
+		os.environ['WANDB_NOTEBOOK_NAME'] = 'trashbot'
+		wandb.init(name = 'tb.'+self.params['exp_name'] ,project="trashbot")
 		wandb.save("*.pt")
 		params['num_train_runs'] = self.num_train
 		params['num_val_runs'] = self.num_val

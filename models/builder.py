@@ -69,6 +69,7 @@ class SeqGoalBC(nn.Module):
 		self.num_dis = params['num_dis']
 		self.dim = params['trans_dim']
 
+		
 		# sequential network (transfermer)
 		# https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 		encoder_layer = nn.TransformerEncoderLayer(d_model=self.tfeat_dim, nhead = self.n_head, dim_feedforward=self.dim)
