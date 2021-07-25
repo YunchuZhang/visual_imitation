@@ -1,1 +1,1 @@
-python train.py --task push --train_dir data/train --val_dir data/val --test_dir data/test --save_dir results
+python src/train.py --task push --train_dir data/pushdata/train --val_dir data/pushdata/val --test_dir data/pushdata/test --save_dir results/ --exp_name no_angle_loss

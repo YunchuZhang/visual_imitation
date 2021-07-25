@@ -209,7 +209,6 @@ class colmapdataset(Dataset):
 			imgs_goal = torch.unsqueeze(self.h_transform(Image.open(goal_img)), 0)
 			img_t = img_t[:-4] + "_mirrored" + img_t[-4:]
 		else:
-			print(img_names)
 			for i in range(self.seq_len+1):
 				imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
 			imgs_goal = torch.unsqueeze(self.transform(Image.open(goal_img)), 0)

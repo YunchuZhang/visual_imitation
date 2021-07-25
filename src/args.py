@@ -9,7 +9,7 @@ def get_args():
 	parser.add_argument('--gpu', type=str, default='True')
 	parser.add_argument('--save_dir', type=str, default="results")
 	parser.add_argument('--exp_name', type=str, default='todo')
-	parser.add_argument('--batch_size', type=int, default=16)
+	parser.add_argument('--batch_size', type=int, default=32)
 	parser.add_argument('--pretrained', type=str, default='True')
 	parser.add_argument('--lr', type=float, default=1e-4)
 	parser.add_argument('--feat_dim', type=int, default=256)
@@ -32,6 +32,7 @@ def get_args():
 	parser.add_argument('--rad', type=str, default="all")
 	parser.add_argument('--n_head', type=int, default=8)
 	parser.add_argument('--n_layers', type=int, default=1) #transformerlayer
+	parser.add_argument('--trans_dim', type=int, default=2048)
 	parser.add_argument('--action_dim', type=int, default=9)
 	parser.add_argument('--num_dis', type=int, default=64) # num of distributions 
 	parser.add_argument('--grip_file', type=str, required=False)

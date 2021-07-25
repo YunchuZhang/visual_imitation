@@ -65,17 +65,17 @@ class PolicyTrainer:
 																					 worker_init_fn=None)
 		self.num_test = len(self.test_set)
 
-		# wandb.init(project="trashbot")
-		# wandb.save("*.pt")
+		wandb.init(project="trashbot")
+		wandb.save("*.pt")
 		params['num_train_runs'] = self.num_train
 		params['num_val_runs'] = self.num_val
 		params['num_test_runs'] = self.num_test
-		# wandb.config.update(params)
+		wandb.config.update(params)
 
 		self.optimizer = optim.Adam(model.parameters(), lr=self.params['lr'])
 
 	def train(self, logdir=None):
-		# wandb.watch(self.model)
+		wandb.watch(self.model)
 
 		self.num_train_batches = np.ceil(self.num_train / self.batch_size)
 		early_stopping = EarlyStop(patience=150)
@@ -98,7 +98,7 @@ class PolicyTrainer:
 			with torch.no_grad():
 				self.run_loop(self.test_loader, "test", epoch, logdir, None)
 
-			# wandb.log(self.wandb_dict)
+			wandb.log(self.wandb_dict)
 
 			if early_stop:
 				print("Early stopping at epoch " + str(epoch))
@@ -115,7 +115,6 @@ class PolicyTrainer:
 		ang_error = []
 
 		dir_loss = []
-		import ipdb;ipdb.set_trace()
 		for i_batch, (batch_img_names, batch_imgs, batch_imgs_goal, batch_actions, runs, aug) in enumerate(data_loader):
 			batch_imgs = batch_imgs.to(self.device)
 			batch_actions.to(self.device)
@@ -264,9 +263,9 @@ class PolicyTrainer:
 			if i_batch % 100 == 0:
 				self.plot(batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos, pred_ang, epoch, i_batch,
 									logdir, current=current, log=True)
-			# else:
-			# 	self.plot(batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos, pred_ang, epoch, i_batch,
-			# 						logdir, current=current, log=False)
+			else:
+				self.plot(batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos, pred_ang, epoch, i_batch,
+									logdir, current=current, log=False)
 		elif epoch == self.epochs - 1:
 			self.plot(batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos, pred_ang, epoch, i_batch,
 								logdir, current=current,

@@ -3,7 +3,9 @@ import matplotlib.cm as cm
 from matplotlib.colors import Normalize
 import numpy as np
 import mpl_toolkits.mplot3d as plt3d
+plt.switch_backend('agg')
 from mpl_toolkits.mplot3d import Axes3D
+
 
 def rect(ax, poke, color, min_z=-1, max_z=1, scale_factor=1, pred=False):
     x, y, z = poke
