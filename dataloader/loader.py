@@ -15,7 +15,7 @@ import os
 
 class colmapdataset(Dataset):
 	"""dataset without gripper motion"""
-	def __init__(self, dataset, params, transform = None):
+	def __init__(self, dataset, params, transform = None, cache_size=5000):
 		"""
 		dataset : train/test/val dataset path with images
 		params : useful params 
@@ -150,6 +150,9 @@ class colmapdataset(Dataset):
 		if self.mirror:
 			print("Augmented images with mirror:", total_imgs * 2)
 
+		self.cache_size = cache_size # how many data points to cache in memory
+		self.cache = {} # from index to tuple
+
 	def get_vals(self, f):
 		input_file = open(f + '/labels.json', 'r')
 		json_decode = json.load(input_file)
@@ -199,24 +202,31 @@ class colmapdataset(Dataset):
 
 	def __getitem__(self, idx):
 		# return imgs with goal
-		img_names, actions, run, mirrored = self.train[idx]
-		img_t = img_names[0][0]
-		goal_img = img_names[0][-1]
-		imgs = []
-		if mirrored:
-			for i in range(self.seq_len+1):
-				imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
-			imgs_goal = torch.unsqueeze(self.h_transform(Image.open(goal_img)), 0)
-			img_t = img_t[:-4] + "_mirrored" + img_t[-4:]
+		if idx in self.cache:
+			img_t, imgs_withgoal, imgs_goal, actions, run, suffix = self.cache[idx]
 		else:
-			for i in range(self.seq_len+1):
-				imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
-			imgs_goal = torch.unsqueeze(self.transform(Image.open(goal_img)), 0)
+			img_names, actions, run, mirrored = self.train[idx]
+			img_t = img_names[0][0]
+			goal_img = img_names[0][-1]
+			imgs = []
+			if mirrored:
+				for i in range(self.seq_len+1):
+					imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
+				imgs_goal = torch.unsqueeze(self.h_transform(Image.open(goal_img)), 0)
+				img_t = img_t[:-4] + "_mirrored" + img_t[-4:]
+			else:
+				for i in range(self.seq_len+1):
+					imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
+				imgs_goal = torch.unsqueeze(self.transform(Image.open(goal_img)), 0)
 
-		if self.dataset == "train" and "cut" in self.rad:
-			opened = self.random_cutout_color(imgs.numpy(), min_cut=10, max_cut=210)
-			imgs = opened
-		return img_t, torch.cat(imgs,dim=0), imgs_goal, actions, run, []
+			if self.dataset == "train" and "cut" in self.rad:
+				opened = self.random_cutout_color(imgs.numpy(), min_cut=10, max_cut=210)
+				imgs = opened
+			suffix = []
+			imgs_withgoal = torch.cat(imgs,dim=0)
+			if len(self.cache) < self.cache_size:
+				self.cache[idx] = (img_t, imgs_withgoal, imgs_goal, actions, run, suffix)
+		return img_t, imgs_withgoal, imgs_goal, actions, run, suffix
 
 	# From RAD
 	def random_cutout_color(self, imgs, min_cut=10, max_cut=30, min_w=10, max_w=60):
