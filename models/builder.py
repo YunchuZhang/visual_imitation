@@ -90,6 +90,18 @@ class SeqGoalBC(nn.Module):
 		self.fcu = nn.Linear(self.tfeat_dim, self.action_dim*self.num_dis)
 		self.fcs = nn.Linear(self.tfeat_dim, self.action_dim*self.num_dis)
 
+		# action net
+		# DEPENDENT, 6D: input 3 images + pos (3) concatenated, output angle in 6d representation
+		dep_a6dfc1 = nn.Linear(in_features=512, out_features=256, bias=True)
+		dep_a6dfc2 = nn.Linear(in_features=256, out_features=6, bias=True)
+		self.dep_a6d_net = nn.Sequential(dep_a6dfc1, nn.ReLU(), dep_a6dfc2)
+
+		# POSITION NET
+		pfc1 = nn.Linear(in_features=512, out_features=256, bias=True)
+		pfc2 = nn.Linear(in_features=256, out_features=3, bias=True)
+		self.p_net = nn.Sequential(pfc1, nn.ReLU(), pfc2)
+
+
 	def logistic_mixture(self, inputs, action_dim = 9, num_dis = 64):
 		'''
 		Args:
@@ -141,15 +153,19 @@ class SeqGoalBC(nn.Module):
 		g_pred = torch.tensor([])
 		if gripper == True:
 			g_pred = self.g_net(emb).reshape(B,1)
+		
+		angle = self.dep_a6d_net(emb).reshape(B,6)
+		pos = self.p_net(emb).reshape(B,3)
 
-		weights = self.fcw(emb).reshape(B,self.action_dim,self.num_dis)
-		mu = self.fcu(emb).reshape(B,self.action_dim,self.num_dis)
-		scale = torch.exp(0.5*self.fcs(emb+1e-4)).reshape(B,self.action_dim,self.num_dis)
-
-		# position and 6d rotaion
-		pred_act = self.logistic_mixture([weights,mu,scale],self.action_dim,self.num_dis)
+		# weights = self.fcw(emb).reshape(B,self.action_dim,self.num_dis)
+		# mu = self.fcu(emb).reshape(B,self.action_dim,self.num_dis)
+		# # scale = torch.exp(0.5*self.fcs(emb+1e-4)).reshape(B,self.action_dim,self.num_dis)
+		# scale = F.relu(self.fcs(emb+1e-4)).reshape(B,self.action_dim,self.num_dis)
+		# # position and 6d rotaion
+		# pred_act = self.logistic_mixture([weights,mu,scale],self.action_dim,self.num_dis)
 			
-		return pred_act[:,:3], pred_act[:,3:], g_pred
+		# return pred_act[:,:3], pred_act[:,3:], g_pred
+		return pos, angle, g_pred
 		
 if __name__ == '__main__':
 	src = torch.rand(10, 5, 3, 224, 224)

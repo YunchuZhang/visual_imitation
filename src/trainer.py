@@ -47,20 +47,20 @@ class PolicyTrainer:
 		self.num_train = len(self.train_set)
 		self.train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True,
 																					sampler=None,
-																					batch_sampler=None, num_workers=4,
+																					batch_sampler=None, num_workers=16,
 																					pin_memory=False, drop_last=False, timeout=0,
 																					worker_init_fn=None)
 
 		self.val_set = Dataset("val", params)
 		self.val_loader = DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False,
-																					num_workers=4,
+																					num_workers=16,
 																					pin_memory=False, drop_last=False, timeout=0,
 																					worker_init_fn=None)
 		self.num_val = len(self.val_set)
 
 		self.test_set = Dataset("test", params)
 		self.test_loader = DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False,
-																					 num_workers=1,
+																					 num_workers=16,
 																					 pin_memory=False, drop_last=False, timeout=0,
 																					 worker_init_fn=None)
 		self.num_test = len(self.test_set)
