@@ -158,8 +158,8 @@ class PolicyTrainer:
 				print('Epoch [{}/{}, Step [{}/{}], Loss: {:.4f}'
 							.format(epoch, self.epochs, i_batch + 1, self.num_train_batches, total_loss.item()))
 
-			self.log_sometimes(epoch, i_batch, batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos,
-												 pred_3d_ang, logdir, current)
+			# self.log_sometimes(epoch, i_batch, batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos,
+			# 									 pred_3d_ang, logdir, current)
 
 		print("Epoch", epoch, current + " Error", np.mean(epoch_error))
 		print("Epoch", epoch, current + " Loss", np.mean(epoch_loss))

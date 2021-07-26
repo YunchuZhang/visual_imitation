@@ -15,7 +15,7 @@ import os
 
 class colmapdataset(Dataset):
 	"""dataset without gripper motion"""
-	def __init__(self, dataset, params, transform = None, cache_size=5000):
+	def __init__(self, dataset, params, transform = None, cache_size=50000):
 		"""
 		dataset : train/test/val dataset path with images
 		params : useful params 

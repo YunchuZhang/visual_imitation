@@ -68,13 +68,14 @@ class SeqGoalBC(nn.Module):
 		self.action_dim = params['action_dim']
 		self.num_dis = params['num_dis']
 		self.dim = params['trans_dim']
+		self.seq_len = params['seq_len']
 
-		
+
 		# sequential network (transfermer)
 		# https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 		encoder_layer = nn.TransformerEncoderLayer(d_model=self.tfeat_dim, nhead = self.n_head, dim_feedforward=self.dim)
 		self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.n_layers)
-		self.pos_encoder = PositionalEncoding(self.tfeat_dim, dropout = 0.1)
+		self.pos_encoder = PositionalEncoding(self.tfeat_dim, dropout = 0.1, max_len=self.seq_len)
 
 		# feature extraction
 		self.img_emb = Featurenet(params)
@@ -141,9 +142,9 @@ class SeqGoalBC(nn.Module):
 		if gripper == True:
 			g_pred = self.g_net(emb).reshape(B,1)
 
-		weights = F.relu(self.fcw(emb)).reshape(B,self.action_dim,self.num_dis)
-		mu = F.relu(self.fcu(emb)).reshape(B,self.action_dim,self.num_dis)
-		scale = F.relu(self.fcs(emb+1e-4)).reshape(B,self.action_dim,self.num_dis)
+		weights = self.fcw(emb).reshape(B,self.action_dim,self.num_dis)
+		mu = self.fcu(emb).reshape(B,self.action_dim,self.num_dis)
+		scale = torch.exp(0.5*self.fcs(emb+1e-4)).reshape(B,self.action_dim,self.num_dis)
 
 		# position and 6d rotaion
 		pred_act = self.logistic_mixture([weights,mu,scale],self.action_dim,self.num_dis)
