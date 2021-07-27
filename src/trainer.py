@@ -47,20 +47,20 @@ class PolicyTrainer:
 		self.num_train = len(self.train_set)
 		self.train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True,
 																					sampler=None,
-																					batch_sampler=None, num_workers=16,
+																					batch_sampler=None, num_workers=24,
 																					pin_memory=False, drop_last=False, timeout=0,
 																					worker_init_fn=None)
 
 		self.val_set = Dataset("val", params)
 		self.val_loader = DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False,
-																					num_workers=16,
+																					num_workers=24,
 																					pin_memory=False, drop_last=False, timeout=0,
 																					worker_init_fn=None)
 		self.num_val = len(self.val_set)
 
 		self.test_set = Dataset("test", params)
 		self.test_loader = DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False,
-																					 num_workers=16,
+																					 num_workers=24,
 																					 pin_memory=False, drop_last=False, timeout=0,
 																					 worker_init_fn=None)
 		self.num_test = len(self.test_set)
@@ -127,7 +127,8 @@ class PolicyTrainer:
 
 			pred_pos, pred_ang, g_pred = self.model.forward(batch_imgs, gripper=False)
 
-			total_loss, total_error, p_loss, p_error, a_loss, a_error, d_loss = self.calculate_loss_error(
+			total_loss, p_loss, p_error, a_loss, d_loss = self.calculate_loss_error(
+			# total_loss, total_error, p_loss, p_error, a_loss, a_error, d_loss = self.calculate_loss_error(
 				pred_pos, pred_ang,
 				real_positions, real_angles, runs,
 			)
@@ -140,10 +141,10 @@ class PolicyTrainer:
 				self.optimizer.step()
 
 			epoch_loss.append(total_loss.item())
-			epoch_error.append(total_error.item())
+			# epoch_error.append(total_error.item())
 
 			ang_loss.append(a_loss.item())
-			ang_error.append(a_error.item())
+			# ang_error.append(a_error.item())
 
 			pos_loss.append(p_loss.item())
 			pos_error.append(p_error.item())
@@ -161,25 +162,25 @@ class PolicyTrainer:
 			# self.log_sometimes(epoch, i_batch, batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos,
 			# 									 pred_3d_ang, logdir, current)
 
-		print("Epoch", epoch, current + " Error", np.mean(epoch_error))
+		# print("Epoch", epoch, current + " Error", np.mean(epoch_error))
 		print("Epoch", epoch, current + " Loss", np.mean(epoch_loss))
 
 		self.wandb_dict.update({
-			current.lower().capitalize() + " Error": np.mean(epoch_error),
+			# current.lower().capitalize() + " Error": np.mean(epoch_error),
 			current.lower().capitalize() + " Loss": np.mean(epoch_loss),
 			current.lower().capitalize() + " Translation Loss": np.mean(pos_loss),
 			current.lower().capitalize() + " Translation Error": np.mean(pos_error),
 			current.lower().capitalize() + " Angle Loss": np.mean(ang_loss),
-			current.lower().capitalize() + " Angle Error": np.mean(ang_error),
+			# current.lower().capitalize() + " Angle Error": np.mean(ang_error),
 			current.lower().capitalize() + " Direction Loss": np.mean(dir_loss),
 		})
 
-		self.logger.log_scalar(np.mean(epoch_error), current + " Error", epoch)
+		# self.logger.log_scalar(np.mean(epoch_error), current + " Error", epoch)
 		self.logger.log_scalar(np.mean(epoch_loss), current + " Loss", epoch)
 		self.logger.log_scalar(np.mean(pos_loss), current + " Translation Loss", epoch)
 		self.logger.log_scalar(np.mean(pos_error), current + " Translation Error", epoch)
 		self.logger.log_scalar(np.mean(ang_loss), current + " Angle Loss", epoch)
-		self.logger.log_scalar(np.mean(ang_error), current + " Angle Error", epoch)
+		# self.logger.log_scalar(np.mean(ang_error), current + " Angle Error", epoch)
 
 		if current == "train":
 			if epoch % 25 == 0 or epoch >= self.epochs - 1:
@@ -332,11 +333,12 @@ class PolicyTrainer:
 						 self.l3 * d_loss
 
 		aloss = mse_aloss
-		a_error = mse_aloss
+		# a_error = mse_aloss
 
 		p_error = mse_ploss
 
 		total_loss = p_loss + (aloss * self.lag)
-		total_error = p_error + (a_error * self.lag)
+		# total_error = p_error + (a_error * self.lag)
 
-		return total_loss, total_error, p_loss, p_error, aloss * self.lag, a_error, d_loss
+		# return total_loss, total_error, p_loss, p_error, aloss * self.lag, a_error, d_loss
+		return total_loss, p_loss, p_error, aloss * self.lag, d_loss
