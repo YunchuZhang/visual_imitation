@@ -74,6 +74,7 @@ class PolicyTrainer:
 		wandb.config.update(params)
 
 		self.optimizer = optim.Adam(model.parameters(), lr=self.params['lr'])
+		self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size = 15, gamma = 0.5)
 
 	def train(self, logdir=None):
 		wandb.watch(self.model)
@@ -100,9 +101,10 @@ class PolicyTrainer:
 				self.run_loop(self.test_loader, "test", epoch, logdir, None)
 
 			wandb.log(self.wandb_dict)
-
 			if early_stop:
 				print("Early stopping at epoch " + str(epoch))
+
+			self.scheduler.step()
 
 	def run_loop(self, data_loader, current, epoch, logdir, early_stopping):
 
@@ -130,7 +132,7 @@ class PolicyTrainer:
 			total_loss, p_loss, p_error, a_loss, d_loss = self.calculate_loss_error(
 			# total_loss, total_error, p_loss, p_error, a_loss, a_error, d_loss = self.calculate_loss_error(
 				pred_pos, pred_ang,
-				real_positions, real_angles, runs,
+				real_positions, real_angles, runs, epoch
 			)
 			if current == "train":
 				self.optimizer.zero_grad()
@@ -159,8 +161,8 @@ class PolicyTrainer:
 				print('Epoch [{}/{}, Step [{}/{}], Loss: {:.4f}'
 							.format(epoch, self.epochs, i_batch + 1, self.num_train_batches, total_loss.item()))
 
-			# self.log_sometimes(epoch, i_batch, batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos,
-			# 									 pred_3d_ang, logdir, current)
+			self.log_sometimes(epoch, i_batch, batch_img_names, batch_imgs, real_positions, real_angles_raw, pred_pos,
+												 pred_3d_ang, logdir, current)
 
 		# print("Epoch", epoch, current + " Error", np.mean(epoch_error))
 		print("Epoch", epoch, current + " Loss", np.mean(epoch_loss))
@@ -175,12 +177,12 @@ class PolicyTrainer:
 			current.lower().capitalize() + " Direction Loss": np.mean(dir_loss),
 		})
 
-		# self.logger.log_scalar(np.mean(epoch_error), current + " Error", epoch)
-		self.logger.log_scalar(np.mean(epoch_loss), current + " Loss", epoch)
-		self.logger.log_scalar(np.mean(pos_loss), current + " Translation Loss", epoch)
-		self.logger.log_scalar(np.mean(pos_error), current + " Translation Error", epoch)
-		self.logger.log_scalar(np.mean(ang_loss), current + " Angle Loss", epoch)
-		# self.logger.log_scalar(np.mean(ang_error), current + " Angle Error", epoch)
+		# # self.logger.log_scalar(np.mean(epoch_error), current + " Error", epoch)
+		# self.logger.log_scalar(np.mean(epoch_loss), current + " Loss", epoch)
+		# self.logger.log_scalar(np.mean(pos_loss), current + " Translation Loss", epoch)
+		# self.logger.log_scalar(np.mean(pos_error), current + " Translation Error", epoch)
+		# self.logger.log_scalar(np.mean(ang_loss), current + " Angle Loss", epoch)
+		# # self.logger.log_scalar(np.mean(ang_error), current + " Angle Error", epoch)
 
 		if current == "train":
 			if epoch % 25 == 0 or epoch >= self.epochs - 1:
@@ -291,18 +293,18 @@ class PolicyTrainer:
 			real_angles = convert_3dmat_to_6d_rep(real_angles_raw, self.device)
 		return real_positions, real_angles, real_angles_raw
 
-	def calculate_loss_error(self, pred_pos, pred_ang, real_positions, real_angles, runs, pred_grip=None,
+	def calculate_loss_error(self, pred_pos, pred_ang, real_positions, real_angles, runs, epoch, pred_grip=None,
 													 real_grip=None):
 
 		p_tensor = pred_pos.to(self.device)
 		a_tensor = pred_ang.to(self.device)
 
-		label_pos = np.array([l.tolist() for l in real_positions]).reshape(len(real_positions), -1)
+		# label_pos = np.array([l.tolist() for l in real_positions]).reshape(len(real_positions), -1)
 		label_ang = np.array([l.tolist() for l in real_angles]).reshape(len(real_angles), -1)
 
-		label_pos = torch.from_numpy(label_pos).float().to(self.device)
+		label_pos = real_positions.float().to(self.device)
 		label_ang = torch.from_numpy(label_ang).float().to(self.device)
-		label_pos.requires_grad=True
+		# label_pos.requires_grad=True
 		label_ang.requires_grad=True
 
 		mse_ploss = self.mse_loss(p_tensor, label_pos)
@@ -337,7 +339,9 @@ class PolicyTrainer:
 
 		p_error = mse_ploss
 
-		total_loss = p_loss + (aloss * self.lag)
+		total_loss = p_loss
+		if epoch > 10:
+			total_loss += (aloss * self.lag)
 		# total_error = p_error + (a_error * self.lag)
 
 		# return total_loss, total_error, p_loss, p_error, aloss * self.lag, a_error, d_loss

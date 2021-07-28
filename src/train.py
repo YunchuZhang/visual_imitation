@@ -45,7 +45,7 @@ def main(params, args):
 			model,
 			params
 		)
-	import ipdb;ipdb.set_trace()
+	
 	trainer.train(logdir)
 
 	makeVideo(logdir, logdir, "test")
