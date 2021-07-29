@@ -62,7 +62,7 @@ class SeqGoalBC(nn.Module):
 		super(SeqGoalBC, self).__init__()
 		self.device = torch.device("cuda:0" if (torch.cuda.is_available() and params['gpu']) else "cpu")
 		self.feat_dim = params['feat_dim']
-		self.tfeat_dim = params['feat_dim'] * 2
+		self.tfeat_dim = params['feat_dim'] * 1
 		self.n_head = params['n_head']
 		self.n_layers = params['n_layers']
 		self.action_dim = params['action_dim']
@@ -75,7 +75,7 @@ class SeqGoalBC(nn.Module):
 		# https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 		encoder_layer = nn.TransformerEncoderLayer(d_model=self.tfeat_dim, nhead = self.n_head, dim_feedforward=self.dim)
 		self.transformer_encoder = nn.TransformerEncoder(encoder_layer, self.n_layers)
-		self.pos_encoder = PositionalEncoding(self.tfeat_dim, dropout = 0.1, max_len=self.seq_len)
+		self.pos_encoder = PositionalEncoding(self.tfeat_dim, dropout = 0.1, max_len=self.seq_len+1)
 
 		# feature extraction
 		self.img_emb = Featurenet(params)
@@ -92,13 +92,13 @@ class SeqGoalBC(nn.Module):
 
 		# action net
 		# DEPENDENT, 6D: input 3 images + pos (3) concatenated, output angle in 6d representation
-		dep_a6dfc1 = nn.Linear(in_features=512, out_features=256, bias=True)
-		dep_a6dfc2 = nn.Linear(in_features=256, out_features=6, bias=True)
+		dep_a6dfc1 = nn.Linear(in_features=self.tfeat_dim, out_features=128, bias=True)
+		dep_a6dfc2 = nn.Linear(in_features=128, out_features=6, bias=True)
 		self.dep_a6d_net = nn.Sequential(dep_a6dfc1, nn.ReLU(), dep_a6dfc2)
 
 		# POSITION NET
-		pfc1 = nn.Linear(in_features=512, out_features=256, bias=True)
-		pfc2 = nn.Linear(in_features=256, out_features=3, bias=True)
+		pfc1 = nn.Linear(in_features=self.tfeat_dim, out_features=128, bias=True)
+		pfc2 = nn.Linear(in_features=128, out_features=3, bias=True)
 		self.p_net = nn.Sequential(pfc1, nn.ReLU(), pfc2)
 
 
@@ -142,8 +142,7 @@ class SeqGoalBC(nn.Module):
 		feat = self.img_emb(imgs.reshape(B*S, C, H, W)) # (B*S, E)	
 		feat = feat.reshape(B, S, self.feat_dim) 
 		# concat goal feature to each feature (B, S-1, tfeat_dim) 
-		feat = torch.cat([feat[:,:-1,:], feat[:,-1:,:].repeat(1,S-1,1)], dim=-1)
-
+		# feat = torch.cat([feat[:,:-1,:], feat[:,-1:,:].repeat(1,S-1,1)], dim=-1)
 		feat = feat.permute(1,0,2).float() # (S, B, E)
 		feat = self.pos_encoder(feat)
 		feat = self.transformer_encoder(feat)
