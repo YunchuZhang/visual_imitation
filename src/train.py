@@ -6,7 +6,7 @@ from args import get_args
 import sys,os
 sys.path.append(os.getcwd())
 
-from models.builder import SeqGoalBC
+from models.builder import SeqGoalBC, Denseattention
 from trainer import PolicyTrainer
 from utils.get_result_vids import makeVideo
 
@@ -35,7 +35,10 @@ def main(params, args):
 
 	print("Training a " + params['model'] + "\n\n")
 
-	model = SeqGoalBC(params).to(device)
+	if params['model'] == "Seq":
+		model = SeqGoalBC(params).to(device)
+	elif params['model'] == "Dense":
+		model = Denseattention(params).to(device)
 
 	with open(logdir + '/params.json', 'w') as outfile:
 		json.dump(params, outfile, indent=4, separators=(',', ': '), sort_keys=True)

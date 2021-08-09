@@ -14,7 +14,7 @@ def get_args():
 	parser.add_argument('--lr', type=float, default=1e-4)
 	parser.add_argument('--feat_dim', type=int, default=256)
 	parser.add_argument('--epochs', type=int, default=60)
-	parser.add_argument('--model', type=str, default="Seq_gcbc", choices=["policy"])
+	parser.add_argument('--model', type=str, default="Seq", choices=["Seq","Dense"])
 	parser.add_argument('--env', type=str, default="trash")
 	parser.add_argument('--history', type=int, default=1)
 	parser.add_argument('--mult', type=int, default=0)

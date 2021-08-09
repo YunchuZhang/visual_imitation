@@ -56,6 +56,7 @@ class colmapdataset(Dataset):
 
 				t_lst = [transforms.Resize(240)]
 
+
 				if "rotate" in self.rad or self.rad == "all":
 					t_lst.append(transforms.RandomRotation(5))
 
@@ -66,9 +67,11 @@ class colmapdataset(Dataset):
 
 				if "jitter" in self.rad or self.rad == "all":
 					t_lst.append(transforms.ColorJitter(0.2, 0.2, 0.2, 0.2))
+				if self.rad == "all":
+					t_lst.append(transforms.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 5)))
 
 				rand_val = random.random()
-				if "mirror" in self.rad and rand_val < 0.5:
+				if self.mirror and rand_val < 0.5:
 					t_lst.append(transforms.RandomHorizontalFlip(1))
 
 				print("List of transforms:", t_lst + [transforms.ToTensor()])
@@ -211,7 +214,7 @@ class colmapdataset(Dataset):
 			imgs = []
 			if mirrored:
 				for i in range(self.seq_len+1):
-					imgs.append(torch.unsqueeze(self.transform(Image.open(img_names[0][i])), 0))
+					imgs.append(torch.unsqueeze(self.h_transform(Image.open(img_names[0][i])), 0))
 				imgs_goal = torch.unsqueeze(self.h_transform(Image.open(goal_img)), 0)
 				img_t = img_t[:-4] + "_mirrored" + img_t[-4:]
 			else:
